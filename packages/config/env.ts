@@ -23,12 +23,15 @@ const baseServerEnvSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 });
 
-const isProd = process.env.NODE_ENV === "production" || process.env.NODE_ENV === undefined;
-const isMvp = process.env.MVP_MODE === "true"; // Allow MVP deployment without all services
+// Helper functions to check environment at validation time (not module load time)
+// This is critical for serverless/edge environments where env vars are available at runtime
+const isProd = () => process.env.NODE_ENV === "production" || process.env.NODE_ENV === undefined;
+const isMvp = () => process.env.MVP_MODE === "true";
 
 export const serverEnvSchema = baseServerEnvSchema.refine(
   (data) => {
-    if (isProd && !isMvp) {
+    // Check at validation time, not schema creation time
+    if (isProd() && !isMvp()) {
       return !!data.UPSTASH_REDIS_REST_URL && !!data.UPSTASH_REDIS_REST_TOKEN;
     }
     return true;
@@ -39,7 +42,7 @@ export const serverEnvSchema = baseServerEnvSchema.refine(
   }
 ).refine(
   (data) => {
-    if (isProd && data.DATABASE_URL.startsWith("libsql://")) {
+    if (isProd() && data.DATABASE_URL.startsWith("libsql://")) {
       return !!data.DATABASE_AUTH_TOKEN;
     }
     return true;
@@ -50,7 +53,8 @@ export const serverEnvSchema = baseServerEnvSchema.refine(
   }
 ).refine(
   (data) => {
-    if (isProd && !isMvp) {
+    // Check at validation time, not schema creation time
+    if (isProd() && !isMvp()) {
       return !!data.STRIPE_SECRET_KEY && !!data.STRIPE_WEBHOOK_SECRET;
     }
     return true;
