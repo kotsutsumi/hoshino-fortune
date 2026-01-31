@@ -21,17 +21,17 @@ const baseServerEnvSchema = z.object({
   LINE_CHANNEL_SECRET: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  // MVP_MODE allows skipping non-essential service requirements
+  MVP_MODE: z.enum(["true", "false"]).optional(),
+  NODE_ENV: z.enum(["development", "production", "test"]).optional(),
 });
-
-// Helper functions to check environment at validation time (not module load time)
-// This is critical for serverless/edge environments where env vars are available at runtime
-const isProd = () => process.env.NODE_ENV === "production" || process.env.NODE_ENV === undefined;
-const isMvp = () => process.env.MVP_MODE === "true";
 
 export const serverEnvSchema = baseServerEnvSchema.refine(
   (data) => {
-    // Check at validation time, not schema creation time
-    if (isProd() && !isMvp()) {
+    // Check from parsed data to avoid build-time inlining issues
+    const isProd = data.NODE_ENV === "production" || data.NODE_ENV === undefined;
+    const isMvp = data.MVP_MODE === "true";
+    if (isProd && !isMvp) {
       return !!data.UPSTASH_REDIS_REST_URL && !!data.UPSTASH_REDIS_REST_TOKEN;
     }
     return true;
@@ -42,7 +42,8 @@ export const serverEnvSchema = baseServerEnvSchema.refine(
   }
 ).refine(
   (data) => {
-    if (isProd() && data.DATABASE_URL.startsWith("libsql://")) {
+    const isProd = data.NODE_ENV === "production" || data.NODE_ENV === undefined;
+    if (isProd && data.DATABASE_URL.startsWith("libsql://")) {
       return !!data.DATABASE_AUTH_TOKEN;
     }
     return true;
@@ -53,8 +54,10 @@ export const serverEnvSchema = baseServerEnvSchema.refine(
   }
 ).refine(
   (data) => {
-    // Check at validation time, not schema creation time
-    if (isProd() && !isMvp()) {
+    // Check from parsed data to avoid build-time inlining issues
+    const isProd = data.NODE_ENV === "production" || data.NODE_ENV === undefined;
+    const isMvp = data.MVP_MODE === "true";
+    if (isProd && !isMvp) {
       return !!data.STRIPE_SECRET_KEY && !!data.STRIPE_WEBHOOK_SECRET;
     }
     return true;
