@@ -1,23 +1,31 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import { env } from "../env";
-import { logger } from "./logger";
+
+// Use console for Edge runtime compatibility (pino doesn't work in Edge)
+const edgeLogger = {
+  error: (...args: unknown[]) => console.error("[ratelimit]", ...args),
+  warn: (...args: unknown[]) => console.warn("[ratelimit]", ...args),
+};
 
 let instance: Ratelimit | undefined;
 
 function getInstance() {
   if (instance) return instance;
-  
+
+  // Use process.env directly to avoid env validation issues in Edge runtime
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
   if (
-    typeof env.UPSTASH_REDIS_REST_URL === "string" && 
-    env.UPSTASH_REDIS_REST_URL.length > 0 && 
-    typeof env.UPSTASH_REDIS_REST_TOKEN === "string" && 
-    env.UPSTASH_REDIS_REST_TOKEN.length > 0
+    typeof upstashUrl === "string" &&
+    upstashUrl.length > 0 &&
+    typeof upstashToken === "string" &&
+    upstashToken.length > 0
   ) {
     instance = new Ratelimit({
       redis: new Redis({
-        url: env.UPSTASH_REDIS_REST_URL,
-        token: env.UPSTASH_REDIS_REST_TOKEN,
+        url: upstashUrl,
+        token: upstashToken,
       }),
       limiter: Ratelimit.slidingWindow(20, "1 m"),
       analytics: true,
@@ -38,12 +46,17 @@ export const ratelimit = {
       return limiter.limit(identifier);
     }
 
-    if (process.env.NODE_ENV === "production") {
-      logger.error("Rate limiting is NOT configured in production! Failing closed.");
+    const isProd = process.env.NODE_ENV === "production" || process.env.NODE_ENV === undefined;
+    const isMvp = process.env.MVP_MODE === "true";
+    if (isProd && !isMvp) {
+      edgeLogger.error("Rate limiting is NOT configured in production! Failing closed.");
       throw new Error("Rate limiting configuration missing in production");
     }
+    if (isProd && isMvp) {
+      edgeLogger.warn("Rate limiting is NOT configured in MVP mode. Allowing request.");
+    }
 
-    logger.warn("Rate limiting is NOT configured. Allowing request (Dev/Test only).");
+    edgeLogger.warn("Rate limiting is NOT configured. Allowing request (Dev/Test only).");
     return { success: true, limit: 20, remaining: 20, reset: Date.now() } as const;
   },
   // For testing purposes only

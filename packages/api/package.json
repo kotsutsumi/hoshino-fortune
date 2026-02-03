@@ -1,0 +1,10 @@
+{
+  "name": "@hoshino/api",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./index.ts",
+  "dependencies": {
+    "@hoshino/domain": "workspace:*",
+    "zod": "^3.24.1"
+  }
+}

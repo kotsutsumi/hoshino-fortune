@@ -1,7 +1,7 @@
-import { FortuneContentSchema } from "@hoshino/domain";
+import { FortuneContentSchema, FortuneContent } from "@hoshino/domain";
 import { z } from "zod";
 
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   if (typeof process !== "undefined" && process.env) {
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
     if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
@@ -61,19 +61,19 @@ export const apiClient = {
       }
 
       const validItems: FortuneContent[] = [];
-      const errors: any[] = [];
+      const validationErrors: { index: number; error: z.ZodError }[] = [];
 
       data.forEach((item, index) => {
         const parsed = FortuneContentSchema.safeParse(item);
         if (parsed.success) {
           validItems.push(parsed.data);
         } else {
-          errors.push({ index, error: parsed.error });
+          validationErrors.push({ index, error: parsed.error });
         }
       });
 
-      if (errors.length > 0) {
-        console.error(`API Validation Warning: ${errors.length} items failed validation and were omitted.`, errors);
+      if (validationErrors.length > 0) {
+        console.warn(`API Validation Warning: ${validationErrors.length} items failed validation and were omitted.`, validationErrors);
       }
       
       return validItems;

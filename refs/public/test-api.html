@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>占いAPI テスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .api-section {
+            border-left: 4px solid #007bff;
+            padding-left: 16px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading {
+            color: #007bff;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .chat-message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            margin-left: 20px;
+        }
+        .ai-message {
+            background-color: #f1f8e9;
+            border-left: 4px solid #4caf50;
+            margin-right: 20px;
+        }
+        .chat-timestamp {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔮 占いAPI テストツール（天干ベース）</h1>
+
+    <!-- 1. 干支判定API -->
+    <div class="container">
+        <div class="api-section">
+            <h2>1. 干支判定API (/api/zodiac)</h2>
+            <div class="note">
+                ※ このAPIは12支（子丑寅...）を返しますが、十神判定では天干（甲乙丙...）を使用します
+            </div>
+            <div class="form-group">
+                <label for="birthDate1">生年月日:</label>
+                <input type="date" id="birthDate1" value="1990-05-15">
+            </div>
+            <button onclick="testZodiacAPI()">干支を判定</button>
+            <div id="zodiacResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 2. 日運勢API -->
+    <div class="container">
+        <div class="api-section">
+            <h2>2. 日運勢API (/api/day-fortune)</h2>
+            <div class="note">
+                ※ このAPIは12支ベースです。天干ベースの運勢は十神判定APIをご利用ください
+            </div>
+            <div class="form-group">
+                <label for="userZodiac">ユーザーの干支（12支）:</label>
+                <select id="userZodiac">
+                    <option value="子">子（鼠）</option>
+                    <option value="丑">丑（牛）</option>
+                    <option value="寅">寅（虎）</option>
+                    <option value="卯">卯（兎）</option>
+                    <option value="辰">辰（龍）</option>
+                    <option value="巳">巳（蛇）</option>
+                    <option value="午">午（馬）</option>
+                    <option value="未">未（羊）</option>
+                    <option value="申">申（猿）</option>
+                    <option value="酉">酉（鶏）</option>
+                    <option value="戌">戌（犬）</option>
+                    <option value="亥">亥（猪）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="targetDate1">対象日（省略時は今日）:</label>
+                <input type="date" id="targetDate1">
+            </div>
+            <button onclick="testDayFortuneAPI()">4ジャンル運勢を取得</button>
+            <div id="dayFortuneResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 3. 十神判定API（天干ベース） -->
+    <div class="container">
+        <div class="api-section">
+            <h2>3. 十神判定API (/api/ten-gods) ★天干ベース★</h2>
+            <div class="note">
+                ✨ こちらが天干（甲乙丙丁戊己庚辛壬癸）ベースの本格的な四柱推命です
+            </div>
+            <div class="form-group">
+                <label for="birthDate2">生年月日:</label>
+                <input type="date" id="birthDate2" value="1990-05-15">
+            </div>
+            <div class="form-group">
+                <label for="targetDate2">対象日（省略時は今日）:</label>
+                <input type="date" id="targetDate2">
+            </div>
+            <button onclick="testTenGodsAPI()">十神を判定（天干ベース）</button>
+            <div id="tenGodsResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 4. 天干直接入力テスト -->
+    <div class="container">
+        <div class="api-section">
+            <h2>4. 天干直接入力テスト</h2>
+            <div class="note">
+                天干を直接指定して十神判定をテストできます
+            </div>
+            <div class="form-group">
+                <label for="birthHeavenly">生まれた日の天干:</label>
+                <select id="birthHeavenly">
+                    <option value="甲">甲（木・陽）</option>
+                    <option value="乙">乙（木・陰）</option>
+                    <option value="丙">丙（火・陽）</option>
+                    <option value="丁">丁（火・陰）</option>
+                    <option value="戊">戊（土・陽）</option>
+                    <option value="己">己（土・陰）</option>
+                    <option value="庚" selected>庚（金・陽）</option>
+                    <option value="辛">辛（金・陰）</option>
+                    <option value="壬">壬（水・陽）</option>
+                    <option value="癸">癸（水・陰）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="targetHeavenly">その日の天干:</label>
+                <select id="targetHeavenly">
+                    <option value="甲">甲（木・陽）</option>
+                    <option value="乙" selected>乙（木・陰）</option>
+                    <option value="丙">丙（火・陽）</option>
+                    <option value="丁">丁（火・陰）</option>
+                    <option value="戊">戊（土・陽）</option>
+                    <option value="己">己（土・陰）</option>
+                    <option value="庚">庚（金・陽）</option>
+                    <option value="辛">辛（金・陰）</option>
+                    <option value="壬">壬（水・陽）</option>
+                    <option value="癸">癸（水・陰）</option>
+                </select>
+            </div>
+            <button onclick="testDirectTenGodsAPI()">直接十神判定</button>
+            <div id="directResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 5. AI占いAPI（天干ベース） -->
+    <div class="container">
+        <div class="api-section">
+            <h2>5. AI占いAPI (/api/ai-fortune) ★天干ベース★</h2>
+            <div class="form-group">
+                <label for="userHeavenly">ユーザーの天干:</label>
+                <select id="userHeavenly">
+                    <option value="甲">甲（木・陽）</option>
+                    <option value="乙">乙（木・陰）</option>
+                    <option value="丙">丙（火・陽）</option>
+                    <option value="丁">丁（火・陰）</option>
+                    <option value="戊">戊（土・陽）</option>
+                    <option value="己">己（土・陰）</option>
+                    <option value="庚" selected>庚（金・陽）</option>
+                    <option value="辛">辛（金・陰）</option>
+                    <option value="壬">壬（水・陽）</option>
+                    <option value="癸">癸（水・陰）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="dayHeavenly">その日の天干:</label>
+                <select id="dayHeavenly">
+                    <option value="甲">甲（木・陽）</option>
+                    <option value="乙" selected>乙（木・陰）</option>
+                    <option value="丙">丙（火・陽）</option>
+                    <option value="丁">丁（火・陰）</option>
+                    <option value="戊">戊（土・陽）</option>
+                    <option value="己">己（土・陰）</option>
+                    <option value="庚">庚（金・陽）</option>
+                    <option value="辛">辛（金・陰）</option>
+                    <option value="壬">壬（水・陽）</option>
+                    <option value="癸">癸（水・陰）</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="fortuneType">占いの種類:</label>
+                <select id="fortuneType">
+                    <option value="general">総合運勢</option>
+                    <option value="love">恋愛運</option>
+                    <option value="work">仕事運</option>
+                    <option value="money">金運</option>
+                    <option value="relationship">人間関係運</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="userTraits">あなたの特徴（任意）:</label>
+                <input type="text" id="userTraits" placeholder="例: 創造的で直感的">
+            </div>
+            <div class="form-group">
+                <label for="specificQuestion">特に知りたいこと（任意）:</label>
+                <textarea id="specificQuestion" rows="2" placeholder="例: 今日の仕事で注意すべきことは？"></textarea>
+            </div>
+            <button onclick="testAIFortuneAPI()">AI占いを実行（天干ベース）</button>
+            <div id="aiFortuneResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 6. ポジティブ変換AI API -->
+    <div class="container">
+        <div class="api-section">
+            <h2>6. ポジティブ変換AI API (/api/positive-reframe) ✨</h2>
+            <div class="note">
+                今日あったことをポジティブに捉え直して、明日からの行動につながるアドバイスを提供します
+            </div>
+            <div class="form-group">
+                <label for="userExperience">今日の体験:</label>
+                <textarea id="userExperience" rows="3" placeholder="例: 今日は仕事でミスをしてしまい、上司に怒られました"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="userMood">現在の気分（任意）:</label>
+                <select id="userMood">
+                    <option value="">選択してください</option>
+                    <option value="落ち込んでいる">落ち込んでいる</option>
+                    <option value="イライラしている">イライラしている</option>
+                    <option value="不安な気持ち">不安な気持ち</option>
+                    <option value="悲しい">悲しい</option>
+                    <option value="疲れている">疲れている</option>
+                    <option value="混乱している">混乱している</option>
+                    <option value="やる気がない">やる気がない</option>
+                    <option value="その他">その他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="experienceContext">状況・背景（任意）:</label>
+                <input type="text" id="experienceContext" placeholder="例: 新しいプロジェクト、人間関係、転職活動など">
+            </div>
+            <button onclick="testPositiveReframeAPI()">ポジティブ変換を実行</button>
+            <div id="positiveReframeResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 7. 会話型相談AI -->
+    <div class="container">
+        <div class="api-section">
+            <h2>7. マツコ風AI相談 (/api/chat-counselor) 💬</h2>
+            <div class="note">
+                毒舌だけど愛のあるマツコ・デラックス風AI。世間の常識をバッサリ斬って、本質を突いて楽にしてくれます。
+            </div>
+            
+            <!-- ユーザープロフィール設定 -->
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <h4 style="margin-top: 0;">👤 プロフィール設定（任意）</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 120px;">
+                        <label for="userName">お名前:</label>
+                        <input type="text" id="userName" placeholder="例: 太郎さん" style="width: 100%;">
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                        <label for="userAge">年代:</label>
+                        <select id="userAge" style="width: 100%;">
+                            <option value="">選択してください</option>
+                            <option value="10代">10代</option>
+                            <option value="20代">20代</option>
+                            <option value="30代">30代</option>
+                            <option value="40代">40代</option>
+                            <option value="50代">50代</option>
+                            <option value="60代以上">60代以上</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                        <label for="userSituation">状況:</label>
+                        <input type="text" id="userSituation" placeholder="例: 会社員、学生" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 会話エリア -->
+            <div id="chatArea" style="border: 1px solid #ddd; border-radius: 8px; height: 400px; overflow-y: auto; padding: 15px; background-color: #fafafa; margin-bottom: 15px;">
+                <div class="chat-message ai-message">
+                    <strong>💬 マツコAI:</strong><br>
+                    はいはい、何の悩み？アタシに言わせりゃ、大体のことなんてどうでもいいのよ。でも聞いてあげるわ。
+                </div>
+            </div>
+
+            <!-- メッセージ入力 -->
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label for="chatMessage">メッセージ:</label>
+                    <textarea id="chatMessage" rows="3" placeholder="相談したいことを自由にお話しください..." style="width: 100%; resize: vertical;"></textarea>
+                </div>
+                <div>
+                    <button onclick="sendChatMessage()" style="height: 50px; white-space: nowrap;">💬 送信</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button onclick="clearChat()" style="background-color: #6c757d;">🗑️ 会話をクリア</button>
+                <button onclick="exportChat()" style="background-color: #28a745;">📄 会話をエクスポート</button>
+            </div>
+
+            <div id="chatStatus" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- 8. 統合テスト -->
+    <div class="container">
+        <div class="api-section">
+            <h2>8. 統合テスト（全API連携・天干ベース）</h2>
+            <div class="form-group">
+                <label for="birthDate3">生年月日:</label>
+                <input type="date" id="birthDate3" value="1990-05-15">
+            </div>
+            <div class="form-group">
+                <label for="targetDate3">対象日（省略時は今日）:</label>
+                <input type="date" id="targetDate3">
+            </div>
+            <button onclick="testIntegratedFlow()">統合テスト実行</button>
+            <div id="integratedResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 共通関数
+        function showResult(elementId, content, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = `result ${isError ? 'error' : 'success'}`;
+            element.textContent = content;
+        }
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = 'result loading';
+            element.textContent = '処理中...';
+        }
+
+        // 1. 干支判定API
+        async function testZodiacAPI() {
+            const birthDate = document.getElementById('birthDate1').value;
+            if (!birthDate) {
+                alert('生年月日を入力してください');
+                return;
+            }
+
+            showLoading('zodiacResult');
+            
+            try {
+                const response = await fetch('/api/zodiac', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ birthDate })
+                });
+                
+                const data = await response.json();
+                showResult('zodiacResult', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('zodiacResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 2. 日運勢API
+        async function testDayFortuneAPI() {
+            const userZodiac = document.getElementById('userZodiac').value;
+            const targetDate = document.getElementById('targetDate1').value;
+
+            showLoading('dayFortuneResult');
+
+            try {
+                const body = { userZodiac };
+                if (targetDate) body.targetDate = targetDate;
+
+                const response = await fetch('/api/day-fortune', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                showResult('dayFortuneResult', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('dayFortuneResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 3. 十神判定API
+        async function testTenGodsAPI() {
+            const birthDate = document.getElementById('birthDate2').value;
+            const targetDate = document.getElementById('targetDate2').value;
+
+            if (!birthDate) {
+                alert('生年月日を入力してください');
+                return;
+            }
+
+            showLoading('tenGodsResult');
+
+            try {
+                const body = { birthDate };
+                if (targetDate) body.targetDate = targetDate;
+
+                const response = await fetch('/api/ten-gods', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                showResult('tenGodsResult', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('tenGodsResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 4. 天干直接入力テスト
+        async function testDirectTenGodsAPI() {
+            const birthHeavenly = document.getElementById('birthHeavenly').value;
+            const targetHeavenly = document.getElementById('targetHeavenly').value;
+
+            showLoading('directResult');
+
+            try {
+                // 天干から直接十神を計算して表示
+                const expectedTenGod = getTenGodDirect(birthHeavenly, targetHeavenly);
+                
+                // APIには天干から干支を構築して送信
+                const birthGanzhi = birthHeavenly + '子'; // 仮の地支
+                const targetGanzhi = targetHeavenly + '子'; // 仮の地支
+
+                // 実際のAPIを呼び出すために、天干から適当な日付を生成
+                const response = await fetch('/api/ten-gods', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        birthDate: '2000-01-01', // ダミー日付
+                        targetDate: '2025-01-01'  // ダミー日付
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // 結果に天干情報を追加表示
+                let result = `=== 天干直接テスト結果 ===\n`;
+                result += `生まれた日の天干: ${birthHeavenly}\n`;
+                result += `その日の天干: ${targetHeavenly}\n`;
+                result += `期待される十神: ${expectedTenGod}\n`;
+                result += `実際の十神: ${data.success ? data.tenGodsAnalysis?.tenGod : 'エラー'}\n\n`;
+                result += `=== API結果 ===\n`;
+                result += JSON.stringify(data, null, 2);
+                
+                showResult('directResult', result);
+            } catch (error) {
+                showResult('directResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 天干から直接十神を計算（参考用）
+        function getTenGodDirect(birth, target) {
+            const combinations = {
+                '甲': {'甲':'比肩','乙':'劫財','丙':'食神','丁':'傷官','戊':'偏財','己':'正財','庚':'偏官','辛':'正官','壬':'偏印','癸':'印綬'},
+                '乙': {'甲':'劫財','乙':'比肩','丙':'傷官','丁':'食神','戊':'正財','己':'偏財','庚':'正官','辛':'偏官','壬':'印綬','癸':'偏印'},
+                '丙': {'甲':'偏印','乙':'印綬','丙':'比肩','丁':'劫財','戊':'食神','己':'傷官','庚':'偏財','辛':'正財','壬':'偏官','癸':'正官'},
+                '丁': {'甲':'印綬','乙':'偏印','丙':'劫財','丁':'比肩','戊':'傷官','己':'食神','庚':'正財','辛':'偏財','壬':'正官','癸':'偏官'},
+                '戊': {'甲':'偏官','乙':'正官','丙':'偏印','丁':'印綬','戊':'比肩','己':'劫財','庚':'食神','辛':'傷官','壬':'偏財','癸':'正財'},
+                '己': {'甲':'正官','乙':'偏官','丙':'印綬','丁':'偏印','戊':'劫財','己':'比肩','庚':'傷官','辛':'食神','壬':'正財','癸':'偏財'},
+                '庚': {'甲':'偏財','乙':'正財','丙':'偏官','丁':'正官','戊':'偏印','己':'印綬','庚':'比肩','辛':'劫財','壬':'食神','癸':'傷官'},
+                '辛': {'甲':'正財','乙':'偏財','丙':'正官','丁':'偏官','戊':'印綬','己':'偏印','庚':'劫財','辛':'比肩','壬':'傷官','癸':'食神'},
+                '壬': {'甲':'食神','乙':'傷官','丙':'偏財','丁':'正財','戊':'偏官','己':'正官','庚':'偏印','辛':'印綬','壬':'比肩','癸':'劫財'},
+                '癸': {'甲':'傷官','乙':'食神','丙':'正財','丁':'偏財','戊':'正官','己':'偏官','庚':'印綬','辛':'偏印','壬':'劫財','癸':'比肩'}
+            };
+            return combinations[birth]?.[target] || '不明';
+        }
+
+        // 5. AI占いAPI（天干ベース）
+        async function testAIFortuneAPI() {
+            const userHeavenly = document.getElementById('userHeavenly').value;
+            const dayHeavenly = document.getElementById('dayHeavenly').value;
+            const fortuneType = document.getElementById('fortuneType').value;
+            const userTraits = document.getElementById('userTraits').value;
+            const specificQuestion = document.getElementById('specificQuestion').value;
+
+            showLoading('aiFortuneResult');
+
+            try {
+                // まず天干ベースの運勢データを取得
+                const dayFortuneResponse = await fetch('/api/day-fortune', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userHeavenlyStem: userHeavenly
+                    })
+                });
+                
+                const dayFortuneData = await dayFortuneResponse.json();
+                
+                if (!dayFortuneData.success) {
+                    throw new Error('天干ベース運勢データの取得に失敗しました');
+                }
+
+                // AI占いAPIを呼び出し（天干ベース）
+                const body = {
+                    userHeavenlyStem: userHeavenly,
+                    dayHeavenlyStem: dayHeavenly,
+                    dayFortuneData: dayFortuneData.fortune,
+                    fortuneType
+                };
+                
+                if (userTraits) body.userTraits = userTraits;
+                if (specificQuestion) body.specificQuestion = specificQuestion;
+
+                const response = await fetch('/api/ai-fortune', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                showResult('aiFortuneResult', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('aiFortuneResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 6. ポジティブ変換AI API
+        async function testPositiveReframeAPI() {
+            const experience = document.getElementById('userExperience').value;
+            const mood = document.getElementById('userMood').value;
+            const context = document.getElementById('experienceContext').value;
+
+            if (!experience.trim()) {
+                alert('今日の体験を入力してください');
+                return;
+            }
+
+            showLoading('positiveReframeResult');
+
+            try {
+                const body = { experience };
+                if (mood) body.mood = mood;
+                if (context) body.context = context;
+
+                const response = await fetch('/api/positive-reframe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // レスポンスを可愛く整形
+                    let formattedResult = `✨🌈 可愛いポジティブ変換結果 🌈✨\n\n`;
+                    formattedResult += `📝 あなたの体験: ${data.originalExperience}\n`;
+                    if (data.mood && data.mood !== '不明') {
+                        formattedResult += `😊 今の気分: ${data.mood}\n`;
+                    }
+                    if (data.context && data.context !== '一般的') {
+                        formattedResult += `🎯 背景: ${data.context}\n`;
+                    }
+                    formattedResult += `\n💕 親友AIからの可愛いメッセージ 💕\n\n`;
+                    
+                    const ai = data.aiResponse;
+                    formattedResult += `🌟 ポジティブ変換:\n${ai.reframedPerspective}\n\n`;
+                    formattedResult += `🤗 共感メッセージ:\n${ai.empathyMessage}\n\n`;
+                    formattedResult += `🌱 成長チャンス:\n${ai.growthOpportunity}\n\n`;
+                    formattedResult += `🚀 明日からのアクション:\n${ai.tomorrowAction}\n\n`;
+                    formattedResult += `🌈 未来のビジョン:\n${ai.longTermVision}\n\n`;
+                    formattedResult += `💪 励ましの言葉:\n${ai.encouragingWords}\n\n`;
+                    formattedResult += `💡 可愛いコツ:\n${ai.practicalTip}\n\n`;
+                    formattedResult += `⏰ 作成日時: ${new Date(data.timestamp).toLocaleString('ja-JP')}\n\n`;
+                    formattedResult += `📊 技術データ (参考用):\n${JSON.stringify(data, null, 2)}`;
+                    
+                    showResult('positiveReframeResult', formattedResult);
+                } else {
+                    showResult('positiveReframeResult', JSON.stringify(data, null, 2), true);
+                }
+            } catch (error) {
+                showResult('positiveReframeResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // 7. 会話型相談AI
+        let conversationHistory = [];
+
+        async function sendChatMessage() {
+            const message = document.getElementById('chatMessage').value.trim();
+            if (!message) {
+                alert('メッセージを入力してください');
+                return;
+            }
+
+            // ユーザープロフィール取得
+            const userProfile = {
+                name: document.getElementById('userName').value,
+                age: document.getElementById('userAge').value,
+                situation: document.getElementById('userSituation').value
+            };
+
+            // ユーザーメッセージを表示
+            addChatMessage('user', message);
+            document.getElementById('chatMessage').value = '';
+
+            // ローディング表示
+            showChatLoading();
+
+            try {
+                const response = await fetch('/api/chat-counselor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        conversationHistory: conversationHistory,
+                        userProfile: userProfile
+                    })
+                });
+
+                const data = await response.json();
+                
+                // ローディングを削除
+                removeChatLoading();
+
+                if (data.success) {
+                    // AIの返答を表示
+                    addChatMessage('assistant', data.aiResponse);
+                    
+                    // 会話履歴に追加
+                    conversationHistory.push(
+                        { role: 'user', content: message, timestamp: new Date().toISOString() },
+                        { role: 'assistant', content: data.aiResponse, timestamp: data.timestamp }
+                    );
+
+                    // ステータス更新
+                    showChatStatus(`✅ メッセージ送信完了 (トークン使用: ${data.metadata?.tokensUsed || 'N/A'})`, false);
+                } else {
+                    addChatMessage('system', `❌ エラー: ${data.error}`);
+                    showChatStatus(`❌ エラー: ${data.error}`, true);
+                }
+
+            } catch (error) {
+                removeChatLoading();
+                addChatMessage('system', `❌ 通信エラー: ${error.message}`);
+                showChatStatus(`❌ 通信エラー: ${error.message}`, true);
+            }
+        }
+
+        function addChatMessage(role, content) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            
+            let className, icon, label;
+            switch(role) {
+                case 'user':
+                    className = 'chat-message user-message';
+                    icon = '👤';
+                    label = 'あなた';
+                    break;
+                case 'assistant':
+                    className = 'chat-message ai-message';
+                    icon = '💬';
+                    label = 'マツコAI';
+                    break;
+                case 'system':
+                    className = 'chat-message';
+                    icon = '⚠️';
+                    label = 'システム';
+                    break;
+            }
+
+            const timestamp = new Date().toLocaleString('ja-JP');
+            messageDiv.className = className;
+            messageDiv.innerHTML = `
+                <strong>${icon} ${label}:</strong><br>
+                ${content.replace(/\n/g, '<br>')}
+                <div class="chat-timestamp">${timestamp}</div>
+            `;
+
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function showChatLoading() {
+            const chatArea = document.getElementById('chatArea');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'chatLoading';
+            loadingDiv.className = 'chat-message ai-message';
+            loadingDiv.innerHTML = '<strong>💬 マツコAI:</strong><br>ちょっと待ちなさいよ... ⏳';
+            chatArea.appendChild(loadingDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function removeChatLoading() {
+            const loadingDiv = document.getElementById('chatLoading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+        }
+
+        function showChatStatus(message, isError = false) {
+            const statusElement = document.getElementById('chatStatus');
+            statusElement.style.display = 'block';
+            statusElement.className = `result ${isError ? 'error' : 'success'}`;
+            statusElement.textContent = message;
+            
+            // 3秒後に自動で隠す
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 3000);
+        }
+
+        function clearChat() {
+            if (confirm('会話履歴をクリアしますか？')) {
+                conversationHistory = [];
+                const chatArea = document.getElementById('chatArea');
+                chatArea.innerHTML = `
+                    <div class="chat-message ai-message">
+                        <strong>💬 マツコAI:</strong><br>
+                        はいはい、何の悩み？アタシに言わせりゃ、大体のことなんてどうでもいいのよ。でも聞いてあげるわ。
+                    </div>
+                `;
+                showChatStatus('✅ 会話履歴をクリアしました', false);
+            }
+        }
+
+        function exportChat() {
+            if (conversationHistory.length === 0) {
+                alert('エクスポートする会話がありません');
+                return;
+            }
+
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                userProfile: {
+                    name: document.getElementById('userName').value,
+                    age: document.getElementById('userAge').value,
+                    situation: document.getElementById('userSituation').value
+                },
+                conversation: conversationHistory
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat_export_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showChatStatus('✅ 会話をエクスポートしました', false);
+        }
+
+        // Enterキーでメッセージ送信（Shift+Enterで改行）
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatMessage = document.getElementById('chatMessage');
+            if (chatMessage) {
+                chatMessage.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChatMessage();
+                    }
+                });
+            }
+        });
+
+        // 8. 統合テスト
+        async function testIntegratedFlow() {
+            const birthDate = document.getElementById('birthDate3').value;
+            const targetDate = document.getElementById('targetDate3').value;
+
+            if (!birthDate) {
+                alert('生年月日を入力してください');
+                return;
+            }
+
+            showLoading('integratedResult');
+
+            try {
+                let result = "=== 統合テスト結果（天干ベース）===\n\n";
+
+                // 1. 干支判定（天干情報取得）
+                result += "1. 干支判定（天干情報取得）:\n";
+                const zodiacResponse = await fetch('/api/zodiac', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ birthDate })
+                });
+                const zodiacData = await zodiacResponse.json();
+                result += JSON.stringify(zodiacData, null, 2) + "\n\n";
+
+                if (!zodiacData.success) {
+                    throw new Error('干支判定に失敗しました');
+                }
+
+                // 2. 十神判定（天干ベース）
+                result += "2. 十神判定（天干ベース）:\n";
+                const body = { birthDate };
+                if (targetDate) body.targetDate = targetDate;
+                
+                const tenGodsResponse = await fetch('/api/ten-gods', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const tenGodsData = await tenGodsResponse.json();
+                result += JSON.stringify(tenGodsData, null, 2) + "\n\n";
+
+                // 3. 天干ベース日運勢
+                if (zodiacData.heavenlyStem) {
+                    result += "3. 天干ベース日運勢:\n";
+                    const dayFortuneResponse = await fetch('/api/day-fortune', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            userHeavenlyStem: zodiacData.heavenlyStem.name,
+                            targetDate: targetDate
+                        })
+                    });
+                    const dayFortuneData = await dayFortuneResponse.json();
+                    result += JSON.stringify(dayFortuneData, null, 2) + "\n\n";
+                }
+
+                // 4. AI占い（天干ベース）
+                if (tenGodsData.success) {
+                    result += "4. AI占い（天干ベース）:\n";
+                    const aiResponse = await fetch('/api/ai-fortune', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userHeavenlyStem: tenGodsData.tenGodsAnalysis.birthHeavenly,
+                            dayHeavenlyStem: tenGodsData.tenGodsAnalysis.targetHeavenly,
+                            dayFortuneData: tenGodsData.fortune,
+                            fortuneType: 'general'
+                        })
+                    });
+                    const aiData = await aiResponse.json();
+                    result += JSON.stringify(aiData, null, 2);
+                }
+
+                showResult('integratedResult', result);
+            } catch (error) {
+                showResult('integratedResult', `エラー: ${error.message}`, true);
+            }
+        }
+
+        // ページ読み込み時に今日の日付を設定
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('targetDate2').value = today;
+            document.getElementById('targetDate3').value = today;
+        };
+    </script>
+</body>
+</html> 

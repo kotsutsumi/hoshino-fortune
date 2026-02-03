@@ -1,0 +1,13 @@
+{
+  "passScore": 80,
+  "stagnationRange": 3,
+  "stagnationLimit": 4,
+  "criticalTagThreshold": 60,
+  "maxIterations": 999,
+  "llm": {
+    "architect": "gemini",
+    "implementer": "codex",
+    "reviewer": "claude",
+    "judge": "gemini"
+  }
+}

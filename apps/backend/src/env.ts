@@ -1,7 +1,10 @@
 import { serverEnvSchema, type ServerEnv } from "@hoshino/config/env";
 
-// Allow skipping validation for build steps (e.g. Docker build), but NEVER in production
-const skipValidation = process.env.SKIP_ENV_VALIDATION === "true" && process.env.NODE_ENV !== "production";
+// Allow skipping validation for build steps (e.g. Docker build, Vercel build).
+// Build-time environment is detected via NEXT_PHASE containing "build"
+const isBuildPhase = process.env.NEXT_PHASE?.includes("build") ||
+                     process.env.SKIP_ENV_VALIDATION === "true";
+const skipValidation = isBuildPhase;
 
 let env: ServerEnv;
 

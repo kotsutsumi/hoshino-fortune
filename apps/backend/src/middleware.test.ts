@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock env BEFORE importing middleware
 vi.mock("./env", () => ({
@@ -21,26 +21,24 @@ import { middleware } from "./middleware";
 import { NextRequest, NextResponse } from "next/server";
 import * as ratelimit from "./lib/ratelimit";
 
-// Mock NextRequest and NextResponse
-class MockResponse {
-  constructor(public body: any, public init: any) {}
-  get status() { return this.init?.status || 200; }
-  get headers() { return new Headers(this.init?.headers || {}); }
-}
-
 vi.mock("next/server", () => {
+  class MockResponse {
+    constructor(public body: any, public init: any) {}
+    get status() { return this.init?.status || 200; }
+    get headers() { return new Headers(this.init?.headers || {}); }
+  }
+
+  class MockNextResponse extends MockResponse {
+    static next() { return new MockResponse(null, { status: 200 }); }
+    static json(body: any, init: any) { return new MockResponse(JSON.stringify(body), init); }
+  }
+
   return {
     NextRequest: vi.fn().mockImplementation((url, init) => ({
       nextUrl: new URL(url),
       headers: new Headers(init?.headers || {}),
     })),
-    NextResponse: Object.assign(
-      vi.fn().mockImplementation((body, init) => new MockResponse(body, init)),
-      {
-        next: vi.fn().mockReturnValue({ status: 200 }),
-        json: vi.fn().mockImplementation((body, init) => new MockResponse(JSON.stringify(body), init)),
-      }
-    ),
+    NextResponse: MockNextResponse,
   };
 });
 
@@ -53,14 +51,17 @@ vi.mock("./lib/ratelimit", () => ({
 }));
 
 describe("middleware", () => {
-  it("should allow requests to non-auth routes without rate limiting", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should allow requests to non-rate-limited routes without rate limiting", async () => {
     const req = {
-      nextUrl: { pathname: "/api/fortunes" },
+      nextUrl: { pathname: "/api/health" },
     } as any;
     
     const res = await middleware(req);
-    // Since we mocked NextResponse.next to return {status: 200}
-    expect(res).toEqual({ status: 200 });
+    expect(res.status).toBe(200);
     expect(ratelimit.checkRateLimit).not.toHaveBeenCalled();
   });
 
@@ -69,8 +70,6 @@ describe("middleware", () => {
       nextUrl: { pathname: "/api/auth/login" },
       headers: new Headers({ "x-forwarded-for": "1.2.3.4" }),
     } as any;
-    
-    vi.mocked = (fn: any) => fn; // Polyfill if needed or just use the fn
     
     (ratelimit.checkRateLimit as any).mockResolvedValue({
       success: true,
@@ -82,6 +81,54 @@ describe("middleware", () => {
     const res = await middleware(req);
     expect(ratelimit.checkRateLimit).toHaveBeenCalledWith("auth_1.2.3.4");
     expect(res.status).toBe(200);
+  });
+
+  it("should rate limit /api/fortunes base route", async () => {
+    const req = {
+      nextUrl: { pathname: "/api/fortunes" },
+      headers: new Headers({ "x-forwarded-for": "1.2.3.4" }),
+    } as any;
+    
+    (ratelimit.checkRateLimit as any).mockResolvedValue({
+      success: true,
+      limit: 20,
+      remaining: 19,
+      reset: Date.now(),
+    });
+
+    const res = await middleware(req);
+    expect(ratelimit.checkRateLimit).toHaveBeenCalledWith("fortunes_1.2.3.4");
+    expect(res.status).toBe(200);
+  });
+
+  it("should rate limit /api/fortunes/:id routes", async () => {
+    const req = {
+      nextUrl: { pathname: "/api/fortunes/123" },
+      headers: new Headers({ "x-forwarded-for": "1.2.3.4" }),
+    } as any;
+    
+    (ratelimit.checkRateLimit as any).mockResolvedValue({
+      success: true,
+      limit: 20,
+      remaining: 19,
+      reset: Date.now(),
+    });
+
+    const res = await middleware(req);
+    expect(ratelimit.checkRateLimit).toHaveBeenCalledWith("fortunes_1.2.3.4");
+    expect(res.status).toBe(200);
+  });
+
+  it("should return 503 when IP address is missing (Fail Closed)", async () => {
+    const req = {
+      nextUrl: { pathname: "/api/auth/login" },
+      headers: new Headers({}), // Missing IP headers
+    } as any;
+
+    const res = await middleware(req);
+    expect(res.status).toBe(503);
+    const body = JSON.parse(res.body as unknown as string);
+    expect(body.error).toContain("Service Unavailable");
   });
 
   it("should return 429 when rate limit is exceeded", async () => {
@@ -118,5 +165,24 @@ describe("middleware", () => {
 
     const res = await middleware(req);
     expect(res.status).toBe(503);
+  });
+
+  it("should handle concurrent requests correctly", async () => {
+    const req = {
+      nextUrl: { pathname: "/api/auth/login" },
+      headers: new Headers({ "x-forwarded-for": "1.2.3.4" }),
+    } as any;
+
+    (ratelimit.checkRateLimit as any).mockResolvedValue({
+      success: true,
+      limit: 20,
+      remaining: 19,
+      reset: Date.now(),
+    });
+
+    const requests = Array(10).fill(req).map(() => middleware(req));
+    await Promise.all(requests);
+
+    expect(ratelimit.checkRateLimit).toHaveBeenCalledTimes(10);
   });
 });
